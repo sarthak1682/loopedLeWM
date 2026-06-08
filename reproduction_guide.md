@@ -73,32 +73,52 @@ Datasets ordered by size (smallest to largest):
 
 To utilize higher VRAM GPUs (A100/H100), override the batch size to `512` and scale the `SIGReg` weight to `0.0225`.
 
-### Looped Predictor (K=6)
+### 4.1 TwoRoom (Sanity check, 5 epochs)
+
+#### Looped Predictor (K=6)
 ```bash
-./train.sh \
-  --dataset tworoom \
-  --predictor looped \
-  --num-loops 6 \
-  --epochs 5 \
-  loader.batch_size=512 \
-  loader.num_workers=8 \
-  output_model_name=lewm_looped \
-  loss.sigreg.weight=0.0225 \
-  model.predictor.checkpoint=true
+./train.sh --dataset tworoom --predictor looped --num-loops 6 --epochs 5 loader.batch_size=512 loader.num_workers=8 output_model_name=tworoom_looped loss.sigreg.weight=0.0225 model.predictor.checkpoint=true
 ```
 
-To run training without activation checkpointing, set `model.predictor.checkpoint=false` (or omit it, as it defaults to false).
-
-### Standard Predictor (Baseline, depth=6)
+#### Standard Predictor (Baseline, depth=6)
 ```bash
-./train.sh \
-  --dataset tworoom \
-  --predictor standard \
-  --epochs 5 \
-  loader.batch_size=512 \
-  loader.num_workers=8 \
-  output_model_name=lewm_standard \
-  loss.sigreg.weight=0.0225
+./train.sh --dataset tworoom --predictor standard --epochs 5 loader.batch_size=512 loader.num_workers=8 output_model_name=tworoom_standard loss.sigreg.weight=0.0225
+```
+
+### 4.2 PushT (50 epochs)
+
+#### Looped Predictor (K=6)
+```bash
+./train.sh --dataset pusht --predictor looped --num-loops 6 --epochs 50 loader.batch_size=512 loader.num_workers=8 output_model_name=pusht_looped loss.sigreg.weight=0.0225 model.predictor.checkpoint=true
+```
+
+#### Standard Predictor (Baseline, depth=6)
+```bash
+./train.sh --dataset pusht --predictor standard --epochs 50 loader.batch_size=512 loader.num_workers=8 output_model_name=pusht_standard loss.sigreg.weight=0.0225
+```
+
+### 4.3 Reacher (50 epochs)
+
+#### Looped Predictor (K=6)
+```bash
+./train.sh --dataset reacher --predictor looped --num-loops 6 --epochs 50 loader.batch_size=512 loader.num_workers=8 output_model_name=reacher_looped loss.sigreg.weight=0.0225 model.predictor.checkpoint=true
+```
+
+#### Standard Predictor (Baseline, depth=6)
+```bash
+./train.sh --dataset reacher --predictor standard --epochs 50 loader.batch_size=512 loader.num_workers=8 output_model_name=reacher_standard loss.sigreg.weight=0.0225
+```
+
+### 4.4 Cube (50 epochs)
+
+#### Looped Predictor (K=6)
+```bash
+./train.sh --dataset cube --predictor looped --num-loops 6 --epochs 50 loader.batch_size=512 loader.num_workers=8 output_model_name=cube_looped loss.sigreg.weight=0.0225 model.predictor.checkpoint=true
+```
+
+#### Standard Predictor (Baseline, depth=6)
+```bash
+./train.sh --dataset cube --predictor standard --epochs 50 loader.batch_size=512 loader.num_workers=8 output_model_name=cube_standard loss.sigreg.weight=0.0225
 ```
 
 ---
@@ -107,16 +127,48 @@ To run training without activation checkpointing, set `model.predictor.checkpoin
 
 To evaluate a model, symlink the target epoch's checkpoint to `weights.pt` inside the run directory.
 
-### Evaluate Looped Predictor
+### 5.1 TwoRoom
 ```bash
-ln -sf ~/.stable-wm/checkpoints/lewm_looped/weights_epoch_5.pt ~/.stable-wm/checkpoints/lewm_looped/weights.pt
-./eval.sh --config-name=tworoom.yaml policy=lewm_looped/weights.pt
+# Looped
+ln -sf ~/.stable-wm/checkpoints/tworoom_looped/weights_epoch_5.pt ~/.stable-wm/checkpoints/tworoom_looped/weights.pt
+./eval.sh --config-name=tworoom.yaml policy=tworoom_looped/weights.pt
+
+# Standard
+ln -sf ~/.stable-wm/checkpoints/tworoom_standard/weights_epoch_5.pt ~/.stable-wm/checkpoints/tworoom_standard/weights.pt
+./eval.sh --config-name=tworoom.yaml policy=tworoom_standard/weights.pt
 ```
 
-### Evaluate Standard Predictor
+### 5.2 PushT
 ```bash
-ln -sf ~/.stable-wm/checkpoints/lewm_standard/weights_epoch_5.pt ~/.stable-wm/checkpoints/lewm_standard/weights.pt
-./eval.sh --config-name=tworoom.yaml policy=lewm_standard/weights.pt
+# Looped
+ln -sf ~/.stable-wm/checkpoints/pusht_looped/weights_epoch_50.pt ~/.stable-wm/checkpoints/pusht_looped/weights.pt
+./eval.sh --config-name=pusht.yaml policy=pusht_looped/weights.pt
+
+# Standard
+ln -sf ~/.stable-wm/checkpoints/pusht_standard/weights_epoch_50.pt ~/.stable-wm/checkpoints/pusht_standard/weights.pt
+./eval.sh --config-name=pusht.yaml policy=pusht_standard/weights.pt
+```
+
+### 5.3 Reacher
+```bash
+# Looped
+ln -sf ~/.stable-wm/checkpoints/reacher_looped/weights_epoch_50.pt ~/.stable-wm/checkpoints/reacher_looped/weights.pt
+./eval.sh --config-name=reacher.yaml policy=reacher_looped/weights.pt
+
+# Standard
+ln -sf ~/.stable-wm/checkpoints/reacher_standard/weights_epoch_50.pt ~/.stable-wm/checkpoints/reacher_standard/weights.pt
+./eval.sh --config-name=reacher.yaml policy=reacher_standard/weights.pt
+```
+
+### 5.4 Cube
+```bash
+# Looped
+ln -sf ~/.stable-wm/checkpoints/cube_looped/weights_epoch_50.pt ~/.stable-wm/checkpoints/cube_looped/weights.pt
+./eval.sh --config-name=cube.yaml policy=cube_looped/weights.pt
+
+# Standard
+ln -sf ~/.stable-wm/checkpoints/cube_standard/weights_epoch_50.pt ~/.stable-wm/checkpoints/cube_standard/weights.pt
+./eval.sh --config-name=cube.yaml policy=cube_standard/weights.pt
 ```
 
 ---
