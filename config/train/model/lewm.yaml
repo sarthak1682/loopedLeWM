@@ -9,12 +9,14 @@ encoder:
   use_mask_token: false
 
 predictor:
-  _target_: module.ARPredictor
+  _target_: module.build_predictor
+  predictor_type: ${predictor_type}
+  num_loops: ${num_loops}
   num_frames: ${history_size}
   input_dim: ${embed_dim}
   hidden_dim: ${embed_dim}
   output_dim: ${embed_dim}
-  depth: 6
+  depth: 6              # used by the standard predictor; ignored when looped
   heads: 16
   mlp_dim: 2048
   dim_head: 64

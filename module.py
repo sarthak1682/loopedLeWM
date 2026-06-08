@@ -1,7 +1,12 @@
+import logging
+import math
+
 import torch
 from torch import nn
 import torch.nn.functional as F
 from einops import rearrange
+
+log = logging.getLogger(__name__)
 
 def modulate(x, shift, scale):
     """AdaLN-zero modulation"""
@@ -283,3 +288,160 @@ class ARPredictor(nn.Module):
         x = self.dropout(x)
         x = self.transformer(x, c)
         return x
+
+
+def sinusoidal_timestep_embedding(num_loops, dim):
+    """Sinusoidal embedding table for loop indices k in {0, ..., num_loops-1}.
+
+    Returns a (num_loops, dim) tensor. Row 0 is shifted to all-zeros so that the
+    k=0 loop adds nothing, which makes a K=1 looped predictor reduce exactly to a
+    single standard block (see LoopedTransformer / the K=1 sanity check). Each
+    loop index still receives a distinct embedding.
+    """
+    pos = torch.arange(num_loops, dtype=torch.float32).unsqueeze(1)  # (K, 1)
+    div = torch.exp(torch.arange(0, dim, 2, dtype=torch.float32) * (-math.log(10000.0) / dim))
+    pe = torch.zeros(num_loops, dim, dtype=torch.float32)
+    pe[:, 0::2] = torch.sin(pos * div)
+    pe[:, 1::2] = torch.cos(pos * div)
+    return pe - pe[0:1]  # τ_0 = 0
+
+
+class LoopedTransformer(nn.Module):
+    """Weight-tied transformer: a single block applied ``num_loops`` times.
+
+    Mirrors ``Transformer``'s scaffolding (input/cond/output projections and a
+    final LayerNorm) so it is weight-comparable to a standard depth-1 transformer,
+    but reuses one shared block. Uses input injection (Yang et al., ICLR 2024):
+    ``h_0 = 0; h_{k+1} = block(h_k + x + τ_k, c)`` where ``x`` is the injected
+    input and ``τ_k`` is the loop-k timestep embedding.
+    """
+
+    def __init__(
+        self,
+        input_dim,
+        hidden_dim,
+        output_dim,
+        num_loops,
+        heads,
+        dim_head,
+        mlp_dim,
+        dropout=0.0,
+        block_class=ConditionalBlock,
+    ):
+        super().__init__()
+        self.num_loops = num_loops
+        self.norm = nn.LayerNorm(hidden_dim)
+
+        self.input_proj = (
+            nn.Linear(input_dim, hidden_dim)
+            if input_dim != hidden_dim
+            else nn.Identity()
+        )
+        self.cond_proj = (
+            nn.Linear(input_dim, hidden_dim)
+            if input_dim != hidden_dim
+            else nn.Identity()
+        )
+        self.output_proj = (
+            nn.Linear(hidden_dim, output_dim)
+            if hidden_dim != output_dim
+            else nn.Identity()
+        )
+
+        # single weight-tied block, applied num_loops times
+        self.block = block_class(hidden_dim, heads, dim_head, mlp_dim, dropout)
+
+        self.register_buffer(
+            "loop_emb", sinusoidal_timestep_embedding(num_loops, hidden_dim)
+        )
+
+    def forward(self, x, c=None):
+        x = self.input_proj(x)
+        if c is not None:
+            c = self.cond_proj(c)
+
+        h = torch.zeros_like(x)
+        for k in range(self.num_loops):
+            inp = h + x + self.loop_emb[k]  # input injection + loop timestep emb
+            h = self.block(inp) if isinstance(self.block, Block) else self.block(inp, c)
+
+        h = self.norm(h)
+        h = self.output_proj(h)
+        return h
+
+
+class LoopedPredictor(nn.Module):
+    """Looped (weight-tied) drop-in replacement for ``ARPredictor``.
+
+    Identical interface to ``ARPredictor`` (``forward(x, c) -> (B, T, output_dim)``)
+    so the JEPA wrapper, loss, training loop, and planner need zero changes. The
+    standard predictor's depth-L transformer body is replaced by a single block
+    looped ``num_loops`` (K) times. ``depth`` is accepted but ignored (the looped
+    body has no notion of stacked depth) so it can share the standard config keys.
+    """
+
+    def __init__(
+        self,
+        *,
+        num_frames,
+        num_loops,
+        heads,
+        mlp_dim,
+        input_dim,
+        hidden_dim,
+        output_dim=None,
+        dim_head=64,
+        dropout=0.0,
+        emb_dropout=0.0,
+        depth=None,
+    ):
+        super().__init__()
+        self.num_loops = num_loops
+        self.pos_embedding = nn.Parameter(torch.randn(1, num_frames, input_dim))
+        self.dropout = nn.Dropout(emb_dropout)
+        self.transformer = LoopedTransformer(
+            input_dim,
+            hidden_dim,
+            output_dim or input_dim,
+            num_loops,
+            heads,
+            dim_head,
+            mlp_dim,
+            dropout,
+            block_class=ConditionalBlock,
+        )
+
+    def forward(self, x, c):
+        """
+        x: (B, T, d)
+        c: (B, T, act_dim)
+        """
+        T = x.size(1)
+        x = x + self.pos_embedding[:, :T]
+        x = self.dropout(x)
+        x = self.transformer(x, c)
+        return x
+
+
+def build_predictor(predictor_type="standard", num_loops=6, **kwargs):
+    """Factory selecting the predictor variant and logging its parameter count.
+
+    predictor_type: "standard" -> ARPredictor (depth-L transformer)
+                    "looped"   -> LoopedPredictor (single block, K=num_loops loops)
+    Extra kwargs are forwarded to the chosen predictor.
+    """
+    if predictor_type == "standard":
+        predictor = ARPredictor(**kwargs)
+        detail = f"depth={kwargs.get('depth')}"
+    elif predictor_type == "looped":
+        kwargs.pop("depth", None)  # depth is meaningless for a weight-tied loop
+        predictor = LoopedPredictor(num_loops=num_loops, **kwargs)
+        detail = f"num_loops={num_loops}"
+    else:
+        raise ValueError(
+            f"Unknown predictor_type={predictor_type!r} (expected 'standard' or 'looped')"
+        )
+
+    n_params = sum(p.numel() for p in predictor.parameters())
+    log.info(f"[predictor] type={predictor_type} {detail} params={n_params:,}")
+    return predictor

@@ -70,6 +70,41 @@ python train.py data=pusht
 
 Checkpoints are saved to `$STABLEWM_HOME` upon completion.
 
+### Looped predictor
+
+The next-state predictor can be swapped for a **looped (weight-tied) transformer**
+— a single block applied `K` times with input injection and a per-loop timestep
+embedding (Yang et al., *Looped Transformers are Better at Learning Learning
+Algorithms*, ICLR 2024) — via two flags, with the rest of LeWM unchanged:
+
+```bash
+python train.py data=pusht predictor_type=looped num_loops=6   # K=6 (default)
+python train.py data=pusht predictor_type=standard             # baseline (default)
+```
+
+`predictor_type` (`standard` | `looped`) and `num_loops` (`K`) live in
+`config/train/lewm.yaml`. The predictor's parameter count is logged at startup so
+the standard-vs-looped reduction is visible (≈6× fewer with `K=6`). Offline sanity
+checks (param count + a `K=1`-equals-a-single-standard-block equivalence assertion)
+run without the training stack:
+
+```bash
+python sanity_check.py
+```
+
+#### PushT data from Hugging Face
+
+`quentinll/lewm-pusht` is published as **both** a model repo and a dataset repo.
+The training data lives in the dataset repo and the existing
+`config/train/data/pusht.yaml` already references it — fetch and decompress into
+`$STABLEWM_HOME`, then train as above (no data-pipeline changes needed):
+
+```bash
+hf download datasets/quentinll/lewm-pusht pusht_expert_train.h5.zst \
+    --repo-type dataset --local-dir $STABLEWM_HOME
+tar --zstd -xvf $STABLEWM_HOME/pusht_expert_train.h5.zst -C $STABLEWM_HOME
+```
+
 For baseline scripts, see the stable-worldmodel [scripts](https://github.com/galilai-group/stable-worldmodel/tree/main/scripts/train) folder.
 
 ## Planning
