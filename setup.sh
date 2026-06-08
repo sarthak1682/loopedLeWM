@@ -131,7 +131,7 @@ download_dataset() {
                 elif [ -f "$HOME/.local/bin/swm" ]; then
                     SWM_BIN="$HOME/.local/bin/swm"
                 fi
-                $SWM_BIN convert --source "$STABLEWM_HOME/datasets/pusht_expert_train.h5" --dest "$STABLEWM_HOME/datasets/pusht_expert_train.lance"
+                $SWM_BIN convert "$STABLEWM_HOME/datasets/pusht_expert_train.h5" "$STABLEWM_HOME/datasets/pusht_expert_train.lance"
                 rm -f "$STABLEWM_HOME/datasets/pusht_expert_train.h5"
             fi
             ;;
