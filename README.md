@@ -1,103 +1,48 @@
+# LoopLeWM — Looped Transformer Predictor for LeWM
 
-# LeWorldModel
-### Stable End-to-End Joint-Embedding Predictive Architecture from Pixels
+A drop-in **looped (weight-tied) transformer predictor** for
+[LeWorldModel (LeWM)](https://github.com/lucas-maes/le-wm). The standard
+`L`-layer next-state predictor is replaced by a *single* transformer block applied
+`K` times with input injection and a per-loop timestep embedding (Yang et al.,
+[*Looped Transformers are Better at Learning Learning Algorithms*](https://arxiv.org/abs/2311.12424),
+ICLR 2024). Everything else in LeWM — encoder, SIGReg loss, training loop, planner
+— is unchanged.
 
-[Lucas Maes*](https://x.com/lucasmaes_), [Quentin Le Lidec*](https://quentinll.github.io/), [Damien Scieur](https://scholar.google.com/citations?user=hNscQzgAAAAJ&hl=fr), [Yann LeCun](https://yann.lecun.com/) and [Randall Balestriero](https://randallbalestriero.github.io/)
+> This is a fork. For the base model, install, data pipeline, planning/eval, and
+> pretrained checkpoints, see the upstream
+> [LeWM README](https://github.com/lucas-maes/le-wm#readme). This document covers
+> only what this fork adds.
 
-**Abstract:** Joint Embedding Predictive Architectures (JEPAs) offer a compelling framework for learning world models in compact latent spaces, yet existing methods remain fragile, relying on complex multi-term losses, exponential moving averages, pretrained encoders, or auxiliary supervision to avoid representation collapse. In this work, we introduce LeWorldModel (LeWM), the first JEPA that trains stably end-to-end from raw pixels using only two loss terms: a next-embedding prediction loss and a regularizer enforcing Gaussian-distributed latent embeddings. This reduces tunable loss hyperparameters from six to one compared to the only existing end-to-end alternative. With ~15M parameters trainable on a single GPU in a few hours, LeWM plans up to 48× faster than foundation-model-based world models while remaining competitive across diverse 2D and 3D control tasks. Beyond control, we show that LeWM's latent space encodes meaningful physical structure through probing of physical quantities. Surprise evaluation confirms that the model reliably detects physically implausible events.
+## What's added
 
-<p align="center">
-   <b>[ <a href="https://arxiv.org/pdf/2603.19312v1">Paper</a> | <a href="https://huggingface.co/collections/quentinll/lewm">Checkpoints &amp; Data</a> | <a href="https://le-wm.github.io/">Website</a> ]</b>
-</p>
+- `module.py` — `LoopedPredictor` / `LoopedTransformer` (one weight-tied
+  `ConditionalBlock` looped `K` times, `h₀=0; h ← Block(h + x + τ_k, c)`) and a
+  `build_predictor` factory. Identical `forward(x, c) → (B, T, D)` interface to the
+  original `ARPredictor`, so nothing downstream changes.
+- `config/train/lewm.yaml` — two flags: `predictor_type` (`standard` | `looped`)
+  and `num_loops` (`K`, default `6`).
+- `sanity_check.py` — offline checks (no training stack required).
 
-<br>
+## Usage
 
-<p align="center">
-  <img src="assets/lewm.gif" width="80%">
-</p>
-
-If you find this code useful, please reference it in your paper:
-```
-@article{maes_lelidec2026lewm,
-  title={LeWorldModel: Stable End-to-End Joint-Embedding Predictive Architecture from Pixels},
-  author={Maes, Lucas and Le Lidec, Quentin and Scieur, Damien and LeCun, Yann and Balestriero, Randall},
-  journal={arXiv preprint},
-  year={2026}
-}
-```
-
-## Using the code
-This codebase builds on [stable-worldmodel](https://github.com/galilai-group/stable-worldmodel) for environment management, planning, and evaluation, and [stable-pretraining](https://github.com/galilai-group/stable-pretraining) for training. Together they reduce this repository to its core contribution: the model architecture and training objective.
-
-**Installation:**
-```bash
-uv venv --python=3.10
-source .venv/bin/activate
-uv pip install stable-worldmodel[train,env]
-```
-
-## Data
-
-Datasets use the HDF5 format for fast loading. Download the data from [HuggingFace](https://huggingface.co/collections/quentinll/lewm) and decompress with:
+Install and prepare data per the upstream
+[LeWM README](https://github.com/lucas-maes/le-wm#readme), then select the
+predictor at launch:
 
 ```bash
-tar --zstd -xvf archive.tar.zst
+python train.py data=pusht predictor_type=looped num_loops=6   # looped (K=6)
+python train.py data=pusht predictor_type=standard             # baseline
 ```
 
-Place the extracted `.h5` files under `$STABLEWM_HOME` (defaults to `~/.stable-wm/`). You can override this path:
-```bash
-export STABLEWM_HOME=/path/to/your/storage
-```
+The predictor's parameter count is logged at startup, so the standard-vs-looped
+reduction is visible (≈6× fewer parameters at `K=6`).
 
-Dataset names are specified without the `.h5` extension. For example, `config/train/data/pusht.yaml` references `pusht_expert_train`, which resolves to `$STABLEWM_HOME/pusht_expert_train.h5`.
-
-## Training
-
-`jepa.py` contains the PyTorch implementation of LeWM. Training is configured via [Hydra](https://hydra.cc/) config files under `config/train/`.
-
-Before training, set your WandB `entity` and `project` in `config/train/lewm.yaml`:
-```yaml
-wandb:
-  config:
-    entity: your_entity
-    project: your_project
-```
-
-To launch training:
-```bash
-python train.py data=pusht
-```
-
-Checkpoints are saved to `$STABLEWM_HOME` upon completion.
-
-### Looped predictor
-
-The next-state predictor can be swapped for a **looped (weight-tied) transformer**
-— a single block applied `K` times with input injection and a per-loop timestep
-embedding (Yang et al., *Looped Transformers are Better at Learning Learning
-Algorithms*, ICLR 2024) — via two flags, with the rest of LeWM unchanged:
-
-```bash
-python train.py data=pusht predictor_type=looped num_loops=6   # K=6 (default)
-python train.py data=pusht predictor_type=standard             # baseline (default)
-```
-
-`predictor_type` (`standard` | `looped`) and `num_loops` (`K`) live in
-`config/train/lewm.yaml`. The predictor's parameter count is logged at startup so
-the standard-vs-looped reduction is visible (≈6× fewer with `K=6`). Offline sanity
-checks (param count + a `K=1`-equals-a-single-standard-block equivalence assertion)
-run without the training stack:
-
-```bash
-python sanity_check.py
-```
-
-#### PushT data from Hugging Face
+### PushT data from Hugging Face
 
 `quentinll/lewm-pusht` is published as **both** a model repo and a dataset repo.
-The training data lives in the dataset repo and the existing
+The training data is in the dataset repo, and the existing
 `config/train/data/pusht.yaml` already references it — fetch and decompress into
-`$STABLEWM_HOME`, then train as above (no data-pipeline changes needed):
+`$STABLEWM_HOME` (no data-pipeline changes needed):
 
 ```bash
 hf download datasets/quentinll/lewm-pusht pusht_expert_train.h5.zst \
@@ -105,115 +50,23 @@ hf download datasets/quentinll/lewm-pusht pusht_expert_train.h5.zst \
 tar --zstd -xvf $STABLEWM_HOME/pusht_expert_train.h5.zst -C $STABLEWM_HOME
 ```
 
-For baseline scripts, see the stable-worldmodel [scripts](https://github.com/galilai-group/stable-worldmodel/tree/main/scripts/train) folder.
+## Sanity checks
 
-## Planning
-
-Evaluation configs live under `config/eval/`. Set the `policy` field to the checkpoint path **relative to `$STABLEWM_HOME`**, without the `_object.ckpt` suffix:
+Runs with only `torch` (no `stable_worldmodel`):
 
 ```bash
-# ✓ correct
-python eval.py --config-name=pusht.yaml policy=pusht/lewm
-
-# ✗ incorrect
-python eval.py --config-name=pusht.yaml policy=pusht/lewm_object.ckpt
+python sanity_check.py
 ```
 
-## Pretrained Checkpoints
+- **Parameter count** — standard (`depth=6`) vs looped (`K=6`); ≈6× reduction.
+- **K=1 equivalence** — a `K=1` looped predictor is bit-identical to a single
+  standard block (asserted with matched weights).
 
-Pretrained LeWM checkpoints for each environment are mirrored on the Hugging Face
-Hub (model repos), alongside the datasets (dataset repos) in the same collection:
+For loss-curve behavior, train a `looped` and a `standard` run and compare
+`train/sigreg_loss` / `train/pred_loss` in WandB.
 
-- [`quentinll/lewm-pusht`](https://huggingface.co/quentinll/lewm-pusht)
-- [`quentinll/lewm-cube`](https://huggingface.co/quentinll/lewm-cube)
-- [`quentinll/lewm-tworooms`](https://huggingface.co/quentinll/lewm-tworooms)
-- [`quentinll/lewm-reacher`](https://huggingface.co/quentinll/lewm-reacher)
+## Citation
 
-The full baseline checkpoint suite (PLDM, LeJEPA, IVL, IQL, GCBC, DINO-WM, DINO-WM-noprop)
-is available on [Google Drive](https://drive.google.com/drive/folders/1r31os0d4-rR0mdHc7OlY_e5nh3XT4r4e):
-
-<div align="center">
-
-| Method | two-room | pusht | cube | reacher |
-|:---:|:---:|:---:|:---:|:---:|
-| pldm | ✓ | ✓ | ✓ | ✓ |
-| lejepa | ✓ | ✓ | ✓ | ✓ |
-| ivl | ✓ | ✓ | ✓ | — |
-| iql | ✓ | ✓ | ✓ | — |
-| gcbc | ✓ | ✓ | ✓ | — |
-| dinowm | ✓ | ✓ | — | — |
-| dinowm_noprop | ✓ | ✓ | ✓ | ✓ |
-
-</div>
-
-## Loading a checkpoint
-
-### From the Drive archive
-
-Each tar archive contains two files per checkpoint:
-- `<name>_object.ckpt` — a serialized Python object for convenient loading; this is what `eval.py` and the `stable_worldmodel` API use
-- `<name>_weight.ckpt` — a weights-only checkpoint (`state_dict`) for cases where you want to load weights into your own model instance
-
-Place the extracted files under `$STABLEWM_HOME/` and load via:
-
-```python
-import stable_worldmodel as swm
-
-# Load the cost model (for MPC)
-cost = swm.policy.AutoCostModel('pusht/lewm')
-```
-
-`AutoCostModel` accepts:
-- `run_name` — checkpoint path **relative to `$STABLEWM_HOME`**, without the `_object.ckpt` suffix
-- `cache_dir` — optional override for the checkpoint root (defaults to `$STABLEWM_HOME`)
-
-The returned module is in `eval` mode with its PyTorch weights accessible via `.state_dict()`.
-
-### From the Hugging Face mirror
-
-The HF model repos ship the LeWM checkpoint as a `weights.pt` (state dict) plus a
-`config.json` describing the model. Convert once to produce the `_object.ckpt`
-that `eval.py` expects:
-
-```bash
-# download weights.pt + config.json
-hf download quentinll/lewm-pusht --local-dir $STABLEWM_HOME/hf_pusht
-
-# convert to object checkpoint under $STABLEWM_HOME/pusht/lewm_object.ckpt
-python - <<'PY'
-import json, torch, stable_pretraining as spt
-from pathlib import Path
-from jepa import JEPA
-from module import ARPredictor, Embedder, MLP
-import stable_worldmodel as swm
-
-src = Path(swm.data.utils.get_cache_dir(), "hf_pusht")
-out = Path(swm.data.utils.get_cache_dir(), "pusht", "lewm_object.ckpt")
-
-cfg = json.loads((src / "config.json").read_text())
-encoder = spt.backbone.utils.vit_hf(
-    cfg["encoder"]["size"],
-    patch_size=cfg["encoder"]["patch_size"],
-    image_size=cfg["encoder"]["image_size"],
-    pretrained=False, use_mask_token=False,
-)
-mlp = lambda k: MLP(input_dim=cfg[k]["input_dim"], output_dim=cfg[k]["output_dim"],
-                    hidden_dim=cfg[k]["hidden_dim"], norm_fn=torch.nn.BatchNorm1d)
-model = JEPA(
-    encoder=encoder,
-    predictor=ARPredictor(**cfg["predictor"]),
-    action_encoder=Embedder(**cfg["action_encoder"]),
-    projector=mlp("projector"),
-    pred_proj=mlp("pred_proj"),
-)
-sd = torch.load(src / "weights.pt", map_location="cpu", weights_only=False)
-model.load_state_dict(sd, strict=True)
-out.parent.mkdir(parents=True, exist_ok=True)
-torch.save(model, out)
-PY
-```
-
-After conversion, load via `swm.policy.AutoCostModel('pusht/lewm')` as usual.
-
-## Contact & Contributions
-Feel free to open [issues](https://github.com/lucas-maes/le-wm/issues)! For questions or collaborations, please contact `lucas.maes@mila.quebec`
+This builds directly on LeWM and the looped-transformer formulation — please cite
+both (see the [upstream README](https://github.com/lucas-maes/le-wm#readme) for the
+LeWM BibTeX).
