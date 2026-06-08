@@ -35,14 +35,61 @@ def lejepa_forward(self, batch, stage, cfg):
     tgt_emb = emb[:, n_preds:] # label
     pred_emb = self.model.predict(ctx_emb, ctx_act) # pred
 
+    # Check for NaNs in predictions or targets
+    if torch.isnan(pred_emb).any() or torch.isnan(tgt_emb).any():
+        print(f"\n[NaN Warning] pred_emb or tgt_emb contains NaNs before loss computation! (stage={stage})")
+
     # LeWM loss
     output["pred_loss"] = (pred_emb - tgt_emb).pow(2).mean()
     output["sigreg_loss"]= self.sigreg(emb.transpose(0, 1))
     output["loss"] = output["pred_loss"] + lambd * output["sigreg_loss"]  
 
+    # Check for NaN in final loss
+    if torch.isnan(output["loss"]):
+        print(f"\n[NaN Loss Detected] stage={stage}:")
+        print(f"  pred_loss: {output['pred_loss'].item():.6f}")
+        print(f"  sigreg_loss: {output['sigreg_loss'].item():.6f}")
+
     losses_dict = {f"{stage}/{k}": v.detach() for k, v in output.items() if "loss" in k}
     self.log_dict(losses_dict, on_step=True, sync_dist=True)
     return output
+
+
+class DetectAnomalyCallback(pl.Callback):
+    """Callback to monitor gradients and parameter weights for NaNs."""
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        # outputs can be a dict from training_step (lejepa_forward) or a tensor
+        loss = None
+        if isinstance(outputs, dict):
+            loss = outputs.get("loss")
+        elif torch.is_tensor(outputs):
+            loss = outputs
+            
+        if loss is not None and torch.isnan(loss).any():
+            print(f"\n[NaN Loss Detected] in trainer at epoch {trainer.current_epoch}, batch {batch_idx}!")
+
+        # Check parameter weights for NaNs
+        nan_params = []
+        for name, param in pl_module.named_parameters():
+            if torch.isnan(param).any():
+                nan_params.append(name)
+        if nan_params:
+            print(f"\n[NaN Weight Detected] at epoch {trainer.current_epoch}, batch {batch_idx}! The following weights are NaN:")
+            for name in nan_params:
+                print(f"  - {name}")
+
+    def on_after_backward(self, trainer, pl_module):
+        # Check gradients for NaNs
+        nan_grads = []
+        for name, param in pl_module.named_parameters():
+            if param.grad is not None and torch.isnan(param.grad).any():
+                nan_grads.append(name)
+        if nan_grads:
+            print(f"\n[NaN Gradient Detected] during backward pass! Gradients for the following parameters are NaN:")
+            for name in nan_grads:
+                print(f"  - {name}")
+
 
 @hydra.main(version_base=None, config_path="./config/train", config_name="lewm")
 def run(cfg):
@@ -120,10 +167,11 @@ def run(cfg):
     object_dump_callback = SaveCkptCallback(
         run_name=cfg.output_model_name, cfg=cfg.model, epoch_interval=1,
     )
+    anomaly_detector = DetectAnomalyCallback()
 
     trainer = pl.Trainer(
         **cfg.trainer,
-        callbacks=[object_dump_callback],
+        callbacks=[object_dump_callback, anomaly_detector],
         num_sanity_val_steps=1,
         logger=logger,
         enable_checkpointing=True,
