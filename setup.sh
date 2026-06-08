@@ -104,7 +104,12 @@ download_and_extract() {
     python3 -c "from huggingface_hub import hf_hub_download; hf_hub_download(repo_id='$repo', filename='$filename', repo_type='dataset', local_dir='$STABLEWM_HOME/datasets')"
     
     echo "Extracting $filename..."
-    tar --zstd -xvf "$STABLEWM_HOME/datasets/$filename" -C "$STABLEWM_HOME/datasets"
+    if [[ "$filename" == *.tar.zst ]]; then
+        tar --zstd -xvf "$STABLEWM_HOME/datasets/$filename" -C "$STABLEWM_HOME/datasets"
+    else
+        # Decompress a standard zstd file directly and remove the compressed source
+        zstd -d -f --rm "$STABLEWM_HOME/datasets/$filename"
+    fi
 }
 
 # Download specified dataset(s)
@@ -114,6 +119,21 @@ download_dataset() {
     case $ds in
         pusht)
             download_and_extract "quentinll/lewm-pusht" "pusht_expert_train.h5.zst"
+            if [ -f "$STABLEWM_HOME/datasets/pusht_expert_train.h5" ]; then
+                echo "Converting pusht_expert_train.h5 to Lance format..."
+                SWM_BIN="swm"
+                if command -v swm &> /dev/null; then
+                    SWM_BIN="swm"
+                elif [ -f "venv/bin/swm" ]; then
+                    SWM_BIN="venv/bin/swm"
+                elif [ -f "../venv/bin/swm" ]; then
+                    SWM_BIN="../venv/bin/swm"
+                elif [ -f "$HOME/.local/bin/swm" ]; then
+                    SWM_BIN="$HOME/.local/bin/swm"
+                fi
+                $SWM_BIN convert --source "$STABLEWM_HOME/datasets/pusht_expert_train.h5" --dest "$STABLEWM_HOME/datasets/pusht_expert_train.lance"
+                rm -f "$STABLEWM_HOME/datasets/pusht_expert_train.h5"
+            fi
             ;;
         reacher)
             download_and_extract "quentinll/lewm-reacher" "reacher.tar.zst"

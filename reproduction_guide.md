@@ -47,22 +47,22 @@ Run the setup script to download and extract datasets to `~/.stable-wm/datasets/
 
 Datasets ordered by size (smallest to largest):
 
-### TwoRoom (~1.8 GB)
+### TwoRoom (~3.43 GB)
 ```bash
 ./setup.sh --dataset tworoom
 ```
 
-### Reacher (~3.5 GB)
-```bash
-./setup.sh --dataset reacher
-```
-
-### PushT (~7.5 GB)
+### PushT (~13.1 GB)
 ```bash
 ./setup.sh --dataset pusht
 ```
 
-### Cube (~12.5 GB)
+### Reacher (~23.8 GB)
+```bash
+./setup.sh --dataset reacher
+```
+
+### Cube (~46.0 GB)
 ```bash
 ./setup.sh --dataset cube
 ```
