@@ -101,7 +101,7 @@ download_and_extract() {
     echo "--------------------------------------------------"
     echo "Downloading $filename from Hugging Face dataset $repo..."
     echo "--------------------------------------------------"
-    python3 -m huggingface_hub.cli.huggingface_cli download --repo-type dataset "$repo" "$filename" --local-dir "$STABLEWM_HOME"
+    python3 -c "from huggingface_hub import hf_hub_download; hf_hub_download(repo_id='$repo', filename='$filename', repo_type='dataset', local_dir='$STABLEWM_HOME')"
     
     echo "Extracting $filename..."
     tar --zstd -xvf "$STABLEWM_HOME/$filename" -C "$STABLEWM_HOME"
