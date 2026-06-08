@@ -101,10 +101,10 @@ download_and_extract() {
     echo "--------------------------------------------------"
     echo "Downloading $filename from Hugging Face dataset $repo..."
     echo "--------------------------------------------------"
-    python3 -c "from huggingface_hub import hf_hub_download; hf_hub_download(repo_id='$repo', filename='$filename', repo_type='dataset', local_dir='$STABLEWM_HOME')"
+    python3 -c "from huggingface_hub import hf_hub_download; hf_hub_download(repo_id='$repo', filename='$filename', repo_type='dataset', local_dir='$STABLEWM_HOME/datasets')"
     
     echo "Extracting $filename..."
-    tar --zstd -xvf "$STABLEWM_HOME/$filename" -C "$STABLEWM_HOME"
+    tar --zstd -xvf "$STABLEWM_HOME/datasets/$filename" -C "$STABLEWM_HOME/datasets"
 }
 
 # Download specified dataset(s)
@@ -118,28 +118,28 @@ download_dataset() {
         reacher)
             download_and_extract "quentinll/lewm-reacher" "reacher.tar.zst"
             # Adjust path if nested
-            if [ -f "$STABLEWM_HOME/reacher/reacher.h5" ]; then
-                mv "$STABLEWM_HOME/reacher/reacher.h5" "$STABLEWM_HOME/reacher.h5"
-                rmdir "$STABLEWM_HOME/reacher" || true
+            if [ -f "$STABLEWM_HOME/datasets/reacher/reacher.h5" ]; then
+                mv "$STABLEWM_HOME/datasets/reacher/reacher.h5" "$STABLEWM_HOME/datasets/reacher.h5"
+                rmdir "$STABLEWM_HOME/datasets/reacher" || true
             fi
             ;;
         tworoom)
             download_and_extract "quentinll/lewm-tworooms" "tworoom.tar.zst"
             # Adjust path if nested
-            if [ -f "$STABLEWM_HOME/tworoom/tworoom.h5" ]; then
-                mv "$STABLEWM_HOME/tworoom/tworoom.h5" "$STABLEWM_HOME/tworoom.h5"
-                rmdir "$STABLEWM_HOME/tworoom" || true
+            if [ -f "$STABLEWM_HOME/datasets/tworoom/tworoom.h5" ]; then
+                mv "$STABLEWM_HOME/datasets/tworoom/tworoom.h5" "$STABLEWM_HOME/datasets/tworoom.h5"
+                rmdir "$STABLEWM_HOME/datasets/tworoom" || true
             fi
             ;;
         cube)
             download_and_extract "quentinll/lewm-cube" "cube_single_expert.tar.zst"
             # Adjust path to match expected directory structure: ogbench/cube_single_expert.h5
-            mkdir -p "$STABLEWM_HOME/ogbench"
-            if [ -f "$STABLEWM_HOME/cube_single_expert.h5" ]; then
-                mv "$STABLEWM_HOME/cube_single_expert.h5" "$STABLEWM_HOME/ogbench/cube_single_expert.h5"
-            elif [ -f "$STABLEWM_HOME/cube_single_expert/cube_single_expert.h5" ]; then
-                mv "$STABLEWM_HOME/cube_single_expert/cube_single_expert.h5" "$STABLEWM_HOME/ogbench/cube_single_expert.h5"
-                rmdir "$STABLEWM_HOME/cube_single_expert" || true
+            mkdir -p "$STABLEWM_HOME/datasets/ogbench"
+            if [ -f "$STABLEWM_HOME/datasets/cube_single_expert.h5" ]; then
+                mv "$STABLEWM_HOME/datasets/cube_single_expert.h5" "$STABLEWM_HOME/datasets/ogbench/cube_single_expert.h5"
+            elif [ -f "$STABLEWM_HOME/datasets/cube_single_expert/cube_single_expert.h5" ]; then
+                mv "$STABLEWM_HOME/datasets/cube_single_expert/cube_single_expert.h5" "$STABLEWM_HOME/datasets/ogbench/cube_single_expert.h5"
+                rmdir "$STABLEWM_HOME/datasets/cube_single_expert" || true
             fi
             ;;
         all)

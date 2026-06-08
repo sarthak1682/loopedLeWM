@@ -72,7 +72,7 @@ fi
 
 # Set up environment variables for dataset lookup
 export STABLEWM_HOME="$(realpath "$STABLEWM_HOME")"
-export LOCAL_DATASET_DIR="$STABLEWM_HOME"
+export LOCAL_DATASET_DIR="$STABLEWM_HOME/datasets"
 
 # Map dataset name to the config/train/data/ yaml filename
 case $DATASET in
