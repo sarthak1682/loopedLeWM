@@ -83,8 +83,11 @@ To utilize higher VRAM GPUs (A100/H100), override the batch size to `512` and sc
   loader.batch_size=512 \
   loader.num_workers=8 \
   output_model_name=lewm_looped \
-  loss.sigreg.weight=0.0225
+  loss.sigreg.weight=0.0225 \
+  model.predictor.checkpoint=true
 ```
+
+To run training without activation checkpointing, set `model.predictor.checkpoint=false` (or omit it, as it defaults to false).
 
 ### Standard Predictor (Baseline, depth=6)
 ```bash
@@ -128,3 +131,6 @@ The library appends a `/datasets` directory suffix internally. Set `LOCAL_DATASE
 
 ### NaN Monitoring
 Added `DetectAnomalyCallback` to `train.py` to monitor weights, predictions, and gradients at each training step to catch and report NaNs immediately.
+
+### Activation Checkpointing
+Tying weights in a looped transformer reduces parameters but PyTorch still caches intermediate activations for all $K$ loops. Adding `model.predictor.checkpoint=true` wraps the loop body in `torch.utils.checkpoint.checkpoint` (with `use_reentrant=False`), dropping the activation VRAM footprint from $O(K)$ to $O(1)$ during the training forward pass.

@@ -4,6 +4,7 @@ import math
 import torch
 from torch import nn
 import torch.nn.functional as F
+import torch.utils.checkpoint
 from einops import rearrange
 
 log = logging.getLogger(__name__)
@@ -327,9 +328,11 @@ class LoopedTransformer(nn.Module):
         mlp_dim,
         dropout=0.0,
         block_class=ConditionalBlock,
+        checkpoint=False,
     ):
         super().__init__()
         self.num_loops = num_loops
+        self.checkpoint = checkpoint
         self.norm = nn.LayerNorm(hidden_dim)
 
         self.input_proj = (
@@ -361,9 +364,23 @@ class LoopedTransformer(nn.Module):
             c = self.cond_proj(c)
 
         h = torch.zeros_like(x)
+
+        def run_block(h_val, x_val, loop_emb_val, c_val):
+            inp = h_val + x_val + loop_emb_val
+            if isinstance(self.block, Block):
+                return self.block(inp)
+            else:
+                return self.block(inp, c_val)
+
         for k in range(self.num_loops):
-            inp = h + x + self.loop_emb[k]  # input injection + loop timestep emb
-            h = self.block(inp) if isinstance(self.block, Block) else self.block(inp, c)
+            if self.checkpoint and self.training:
+                # use_reentrant=False is safer, faster, and standard in torch 2.x
+                h = torch.utils.checkpoint.checkpoint(
+                    run_block, h, x, self.loop_emb[k], c, use_reentrant=False
+                )
+            else:
+                inp = h + x + self.loop_emb[k]  # input injection + loop timestep emb
+                h = self.block(inp) if isinstance(self.block, Block) else self.block(inp, c)
 
         h = self.norm(h)
         h = self.output_proj(h)
@@ -394,6 +411,7 @@ class LoopedPredictor(nn.Module):
         dropout=0.0,
         emb_dropout=0.0,
         depth=None,
+        checkpoint=False,
     ):
         super().__init__()
         self.num_loops = num_loops
@@ -409,6 +427,7 @@ class LoopedPredictor(nn.Module):
             mlp_dim,
             dropout,
             block_class=ConditionalBlock,
+            checkpoint=checkpoint,
         )
 
     def forward(self, x, c):
@@ -430,13 +449,14 @@ def build_predictor(predictor_type="standard", num_loops=6, **kwargs):
                     "looped"   -> LoopedPredictor (single block, K=num_loops loops)
     Extra kwargs are forwarded to the chosen predictor.
     """
+    checkpoint = kwargs.pop("checkpoint", False)
     if predictor_type == "standard":
         predictor = ARPredictor(**kwargs)
         detail = f"depth={kwargs.get('depth')}"
     elif predictor_type == "looped":
         kwargs.pop("depth", None)  # depth is meaningless for a weight-tied loop
-        predictor = LoopedPredictor(num_loops=num_loops, **kwargs)
-        detail = f"num_loops={num_loops}"
+        predictor = LoopedPredictor(num_loops=num_loops, checkpoint=checkpoint, **kwargs)
+        detail = f"num_loops={num_loops} checkpoint={checkpoint}"
     else:
         raise ValueError(
             f"Unknown predictor_type={predictor_type!r} (expected 'standard' or 'looped')"
