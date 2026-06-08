@@ -56,9 +56,8 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         *)
-            echo "Unknown option: $1"
-            show_help
-            exit 1
+            EXTRA_ARGS="$EXTRA_ARGS $1"
+            shift
             ;;
     esac
 done
@@ -95,6 +94,10 @@ CMD="python train.py data=$DATA_CFG predictor_type=$PREDICTOR_TYPE num_loops=$NU
 
 if [ -n "$MAX_EPOCHS" ]; then
     CMD="$CMD trainer.max_epochs=$MAX_EPOCHS"
+fi
+
+if [ -n "$EXTRA_ARGS" ]; then
+    CMD="$CMD $EXTRA_ARGS"
 fi
 
 echo "=================================================="
