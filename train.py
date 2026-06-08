@@ -51,7 +51,7 @@ def lejepa_forward(self, batch, stage, cfg):
         print(f"  sigreg_loss: {output['sigreg_loss'].item():.6f}")
 
     losses_dict = {f"{stage}/{k}": v.detach() for k, v in output.items() if "loss" in k}
-    self.log_dict(losses_dict, on_step=True, sync_dist=True)
+    self.log_dict(losses_dict, on_step=True, sync_dist=True, prog_bar=True)
     return output
 
 
