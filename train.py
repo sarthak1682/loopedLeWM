@@ -101,7 +101,7 @@ def run(cfg):
     dataset_name = dataset_cfg.pop("name")
     cache_dir = os.environ.get("LOCAL_DATASET_DIR", None)
     dataset = swm.data.load_dataset(
-        dataset_name, transform=None, cache_dir=cache_dir, **dataset_cfg
+        dataset_name, transform=None, cache_dir=cache_dir, datasets_dir=cache_dir, **dataset_cfg
     )
     transforms = [get_img_preprocessor(source='pixels', target='pixels', img_size=cfg.img_size)]
     
