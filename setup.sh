@@ -139,7 +139,7 @@ download_dataset() {
                     elif [ -f "$HOME/.local/bin/swm" ]; then
                         SWM_BIN="$HOME/.local/bin/swm"
                     fi
-                    $SWM_BIN convert pusht_expert_train.h5 pusht_expert_train.lance
+                    $SWM_BIN convert pusht_expert_train pusht_expert_train.lance --dest-format lance
                     rm -f "$STABLEWM_HOME/datasets/pusht_expert_train.h5"
                 else
                     echo "Error: pusht_expert_train.h5 not found after extraction."
