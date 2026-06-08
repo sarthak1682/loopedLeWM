@@ -118,48 +118,72 @@ download_dataset() {
     
     case $ds in
         pusht)
-            download_and_extract "quentinll/lewm-pusht" "pusht_expert_train.h5.zst"
-            if [ -f "$STABLEWM_HOME/datasets/pusht_expert_train.h5" ]; then
-                echo "Converting pusht_expert_train.h5 to Lance format..."
-                SWM_BIN="swm"
-                if command -v swm &> /dev/null; then
-                    SWM_BIN="swm"
-                elif [ -f "venv/bin/swm" ]; then
-                    SWM_BIN="venv/bin/swm"
-                elif [ -f "../venv/bin/swm" ]; then
-                    SWM_BIN="../venv/bin/swm"
-                elif [ -f "$HOME/.local/bin/swm" ]; then
-                    SWM_BIN="$HOME/.local/bin/swm"
+            if [ -d "$STABLEWM_HOME/datasets/pusht_expert_train.lance" ]; then
+                echo "pusht_expert_train.lance already exists. Skipping setup."
+            else
+                if [ ! -f "$STABLEWM_HOME/datasets/pusht_expert_train.h5" ]; then
+                    download_and_extract "quentinll/lewm-pusht" "pusht_expert_train.h5.zst"
+                else
+                    echo "pusht_expert_train.h5 already exists. Skipping download and proceeding directly to conversion."
                 fi
-                $SWM_BIN convert "$STABLEWM_HOME/datasets/pusht_expert_train.h5" "$STABLEWM_HOME/datasets/pusht_expert_train.lance"
-                rm -f "$STABLEWM_HOME/datasets/pusht_expert_train.h5"
+
+                if [ -f "$STABLEWM_HOME/datasets/pusht_expert_train.h5" ]; then
+                    echo "Converting pusht_expert_train.h5 to Lance format..."
+                    SWM_BIN="swm"
+                    if command -v swm &> /dev/null; then
+                        SWM_BIN="swm"
+                    elif [ -f "venv/bin/swm" ]; then
+                        SWM_BIN="venv/bin/swm"
+                    elif [ -f "../venv/bin/swm" ]; then
+                        SWM_BIN="../venv/bin/swm"
+                    elif [ -f "$HOME/.local/bin/swm" ]; then
+                        SWM_BIN="$HOME/.local/bin/swm"
+                    fi
+                    $SWM_BIN convert pusht_expert_train.h5 pusht_expert_train.lance
+                    rm -f "$STABLEWM_HOME/datasets/pusht_expert_train.h5"
+                else
+                    echo "Error: pusht_expert_train.h5 not found after extraction."
+                    exit 1
+                fi
             fi
             ;;
         reacher)
-            download_and_extract "quentinll/lewm-reacher" "reacher.tar.zst"
-            # Adjust path if nested
-            if [ -f "$STABLEWM_HOME/datasets/reacher/reacher.h5" ]; then
-                mv "$STABLEWM_HOME/datasets/reacher/reacher.h5" "$STABLEWM_HOME/datasets/reacher.h5"
-                rmdir "$STABLEWM_HOME/datasets/reacher" || true
+            if [ -f "$STABLEWM_HOME/datasets/reacher.h5" ]; then
+                echo "reacher.h5 already exists. Skipping setup."
+            else
+                download_and_extract "quentinll/lewm-reacher" "reacher.tar.zst"
+                # Adjust path if nested
+                if [ -f "$STABLEWM_HOME/datasets/reacher/reacher.h5" ]; then
+                    mv "$STABLEWM_HOME/datasets/reacher/reacher.h5" "$STABLEWM_HOME/datasets/reacher.h5"
+                    rmdir "$STABLEWM_HOME/datasets/reacher" || true
+                fi
             fi
             ;;
         tworoom)
-            download_and_extract "quentinll/lewm-tworooms" "tworoom.tar.zst"
-            # Adjust path if nested
-            if [ -f "$STABLEWM_HOME/datasets/tworoom/tworoom.h5" ]; then
-                mv "$STABLEWM_HOME/datasets/tworoom/tworoom.h5" "$STABLEWM_HOME/datasets/tworoom.h5"
-                rmdir "$STABLEWM_HOME/datasets/tworoom" || true
+            if [ -f "$STABLEWM_HOME/datasets/tworoom.h5" ]; then
+                echo "tworoom.h5 already exists. Skipping setup."
+            else
+                download_and_extract "quentinll/lewm-tworooms" "tworoom.tar.zst"
+                # Adjust path if nested
+                if [ -f "$STABLEWM_HOME/datasets/tworoom/tworoom.h5" ]; then
+                    mv "$STABLEWM_HOME/datasets/tworoom/tworoom.h5" "$STABLEWM_HOME/datasets/tworoom.h5"
+                    rmdir "$STABLEWM_HOME/datasets/tworoom" || true
+                fi
             fi
             ;;
         cube)
-            download_and_extract "quentinll/lewm-cube" "cube_single_expert.tar.zst"
-            # Adjust path to match expected directory structure: ogbench/cube_single_expert.h5
-            mkdir -p "$STABLEWM_HOME/datasets/ogbench"
-            if [ -f "$STABLEWM_HOME/datasets/cube_single_expert.h5" ]; then
-                mv "$STABLEWM_HOME/datasets/cube_single_expert.h5" "$STABLEWM_HOME/datasets/ogbench/cube_single_expert.h5"
-            elif [ -f "$STABLEWM_HOME/datasets/cube_single_expert/cube_single_expert.h5" ]; then
-                mv "$STABLEWM_HOME/datasets/cube_single_expert/cube_single_expert.h5" "$STABLEWM_HOME/datasets/ogbench/cube_single_expert.h5"
-                rmdir "$STABLEWM_HOME/datasets/cube_single_expert" || true
+            if [ -f "$STABLEWM_HOME/datasets/ogbench/cube_single_expert.h5" ]; then
+                echo "ogbench/cube_single_expert.h5 already exists. Skipping setup."
+            else
+                download_and_extract "quentinll/lewm-cube" "cube_single_expert.tar.zst"
+                # Adjust path to match expected directory structure: ogbench/cube_single_expert.h5
+                mkdir -p "$STABLEWM_HOME/datasets/ogbench"
+                if [ -f "$STABLEWM_HOME/datasets/cube_single_expert.h5" ]; then
+                    mv "$STABLEWM_HOME/datasets/cube_single_expert.h5" "$STABLEWM_HOME/datasets/ogbench/cube_single_expert.h5"
+                elif [ -f "$STABLEWM_HOME/datasets/cube_single_expert/cube_single_expert.h5" ]; then
+                    mv "$STABLEWM_HOME/datasets/cube_single_expert/cube_single_expert.h5" "$STABLEWM_HOME/datasets/ogbench/cube_single_expert.h5"
+                    rmdir "$STABLEWM_HOME/datasets/cube_single_expert" || true
+                fi
             fi
             ;;
         all)
